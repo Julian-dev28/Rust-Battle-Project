@@ -27,7 +27,7 @@ pub struct Battle {
     pub name: Symbol,
     pub players: Vec<Address>,
     pub moves: Vec<u64>,
-    pub winner: Address,
+    pub winner: Option<Address>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -63,7 +63,7 @@ impl BattleContract {
         players.push_front(user.clone());
     }
 
-    pub fn create_battle(env: Env, name: Symbol, user: Address) {
+    pub fn create_battle(env: Env, name: Symbol, user: Address, _winner: Option<Address>) {
         user.require_auth();
         env.storage().instance().set(
             &DataKey::Battle(name.clone()),
@@ -72,7 +72,7 @@ impl BattleContract {
                 name: name.clone(),
                 players: vec![&env, user.clone()],
                 moves: Vec::new(&env),
-                winner: env.current_contract_address(),
+                winner: _winner,
             },
         );
 
