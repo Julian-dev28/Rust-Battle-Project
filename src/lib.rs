@@ -55,12 +55,38 @@ impl BattleContract {
             },
         );
 
-        let mut players: Vec<Address> = env
-            .storage()
+        let mut players: Vec<Address> = Self::get_players(env.clone());
+        players.push_back(user.clone());
+        env.storage().instance().set(&DataKey::Players, &players);
+    }
+
+    pub fn get_players(env: Env) -> Vec<Address> {
+        env.storage()
             .instance()
             .get(&DataKey::Players)
-            .unwrap_or(Vec::new(&env));
-        players.push_front(user.clone());
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn set_players(env: Env, players: Vec<Address>) {
+        env.storage().instance().set(&DataKey::Players, &players);
+    }
+
+    pub fn get_player_stats(env: Env, user: Address) -> PlayerStat {
+        env.storage()
+            .instance()
+            .get(&DataKey::Player(user))
+            .unwrap_or(PlayerStat {
+                health: 0,
+                attack: 0,
+                defense: 0,
+                in_battle: false,
+            })
+    }
+
+    pub fn set_player_stats(env: Env, user: Address, player_stat: PlayerStat) {
+        env.storage()
+            .instance()
+            .set(&DataKey::Player(user), &player_stat);
     }
 
     pub fn create_battle(env: Env, name: Symbol, user: Address) {
@@ -76,53 +102,89 @@ impl BattleContract {
             },
         );
 
-        let mut battles: Vec<Symbol> = env
-            .storage()
-            .instance()
-            .get(&DataKey::Battles)
-            .unwrap_or(Vec::new(&env));
-
-        let mut player: PlayerStat = env
-            .storage()
-            .instance()
-            .get(&DataKey::Player(user.clone()))
-            .unwrap_or(PlayerStat {
-                health: 0,
-                attack: 0,
-                defense: 0,
-                in_battle: false,
-            });
-
+        let mut player = Self::get_player_stats(env.clone(), user.clone());
+        assert!(!player.in_battle, "Player already in battle");
         player.in_battle = true;
-        battles.push_front(name.clone());
+        Self::set_player_stats(env.clone(), user.clone(), player);
+
+        let mut battles = Self::get_battles(env.clone());
+        battles.push_back(name.clone());
+        Self::set_battles(env.clone(), battles);
+    }
+
+    pub fn create_auto_battle(env: Env, name: Symbol, user: Address) {
+        user.require_auth();
+        let contract_id = env.current_contract_address();
+        env.storage().instance().set(
+            &DataKey::Battle(name.clone()),
+            &Battle {
+                battle_status: 1,
+                name: name.clone(),
+                players: vec![&env, user.clone(), contract_id.clone()],
+                moves: Vec::new(&env),
+                winner: contract_id.clone(),
+            },
+        );
+
+        let mut battles = Self::get_battles(env.clone());
+        battles.push_back(name.clone());
+        Self::set_battles(env.clone(), battles);
     }
 
     pub fn join_battle(env: Env, name: Symbol, user: Address) {
         user.require_auth();
-        let mut battle: Battle = env
-            .storage()
-            .instance()
-            .get(&DataKey::Battle(name.clone()))
-            .unwrap();
-
-        let mut player: PlayerStat = env
-            .storage()
-            .instance()
-            .get(&DataKey::Player(user.clone()))
-            .unwrap();
-
+        let mut battle = Self::get_battle(env.clone(), name.clone());
         assert!(battle.battle_status == 0, "Battle already started");
+        let mut player = Self::get_player_stats(env.clone(), user.clone());
+        assert!(!player.in_battle, "Player already in battle");
 
-        battle.players.push_front(user.clone());
+        battle.players.push_back(user.clone());
         battle.battle_status = 1;
         player.in_battle = true;
+
+        Self::set_battle(env.clone(), name.clone(), battle);
+        Self::set_player_stats(env.clone(), user.clone(), player);
+    }
+
+    pub fn challenge_bot(env: Env, name: Symbol) {
+        let mut battle = Self::get_battle(env.clone(), name.clone());
+        assert!(battle.battle_status == 0, "Battle already started");
+        let contract_id = env.current_contract_address();
+
+        battle.players.push_back(contract_id.clone());
+        battle.battle_status = 1;
+
+        Self::set_battle(env.clone(), name.clone(), battle);
     }
 
     pub fn get_battle(env: Env, name: Symbol) -> Battle {
         env.storage()
             .instance()
             .get(&DataKey::Battle(name.clone()))
-            .unwrap()
+            .unwrap_or(Battle {
+                battle_status: 0,
+                name: name.clone(),
+                players: Vec::new(&env),
+                moves: Vec::new(&env),
+                winner: env.current_contract_address(),
+            })
+    }
+
+    pub fn set_battle(env: Env, name: Symbol, battle: Battle) {
+        env.storage()
+            .instance()
+            .set(&DataKey::Battle(name.clone()), &battle);
+    }
+
+    pub fn get_battles(env: Env) -> Vec<Symbol> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Battles)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn set_battles(env: Env, battles: Vec<Symbol>) {
+        env.storage().instance().set(&DataKey::Battles, &battles);
     }
 
     pub fn increase_health(env: Env, user: Address, incr: u32) -> u32 {
@@ -133,9 +195,7 @@ impl BattleContract {
         player_stat.health += incr;
 
         // Save the count.
-        env.storage()
-            .instance()
-            .set(&DataKey::Player(user.clone()), &player_stat);
+        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
 
         // Return the count to the caller.
         player_stat.health
@@ -149,9 +209,7 @@ impl BattleContract {
         player_stat.health -= decr;
 
         // Save the count.
-        env.storage()
-            .instance()
-            .set(&DataKey::Player(user.clone()), &player_stat);
+        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
 
         // Return the count to the caller.
         player_stat.health
@@ -165,9 +223,7 @@ impl BattleContract {
         player_stat.attack += incr;
 
         // Save the count.
-        env.storage()
-            .instance()
-            .set(&DataKey::Player(user.clone()), &player_stat);
+        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
 
         // Return the count to the caller.
         player_stat.attack
@@ -181,9 +237,7 @@ impl BattleContract {
         player_stat.attack -= decr;
 
         // Save the count.
-        env.storage()
-            .instance()
-            .set(&DataKey::Player(user.clone()), &player_stat);
+        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
 
         // Return the count to the caller.
         player_stat.attack
@@ -197,9 +251,7 @@ impl BattleContract {
         player_stat.defense += incr;
 
         // Save the count.
-        env.storage()
-            .instance()
-            .set(&DataKey::Player(user.clone()), &player_stat);
+        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
 
         // Return the count to the caller.
         player_stat.defense
@@ -213,24 +265,10 @@ impl BattleContract {
         player_stat.defense -= decr;
 
         // Save the count.
-        env.storage()
-            .instance()
-            .set(&DataKey::Player(user.clone()), &player_stat);
+        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
 
         // Return the count to the caller.
         player_stat.defense
-    }
-
-    pub fn get_player_stats(env: Env, user: Address) -> PlayerStat {
-        env.storage()
-            .instance()
-            .get(&DataKey::Player(user))
-            .unwrap_or(PlayerStat {
-                health: 0,
-                attack: 0,
-                defense: 0,
-                in_battle: false,
-            })
     }
 }
 

@@ -109,37 +109,17 @@ fn test_create_and_join_battle() {
             winner: contract_id.clone(),
         }
     );
+    assert_eq!(client.get_player_stats(&user_1).in_battle, true);
 
-    // assert_eq!(client.increase_health(&user_2, &10), 10);
-    // assert_eq!(
-    //     client.get_player_stats(&user_2),
-    //     PlayerStat {
-    //         health: 10,
-    //         attack: 0,
-    //         defense: 0,
-    //         in_battle: false,
-    //     }
-    // );
-
-    // assert_eq!(client.decrease_health(&user_1, &9), 1);
-    // assert_eq!(
-    //     client.get_player_stats(&user_1),
-    //     PlayerStat {
-    //         health: 1,
-    //         attack: 0,
-    //         defense: 0,
-    //         in_battle: false,
-    //     }
-    // );
-
-    // assert_eq!(client.decrease_health(&user_2, &9), 1);
-    // assert_eq!(
-    //     client.get_player_stats(&user_2),
-    //     PlayerStat {
-    //         health: 1,
-    //         attack: 0,
-    //         defense: 0,
-    //         in_battle: false,
-    //     }
-    // );
+    client.join_battle(&battle_name, &user_2);
+    assert_eq!(
+        client.get_battle(&battle_name),
+        Battle {
+            battle_status: 1,
+            name: battle_name.clone(),
+            players: vec![&env, user_1.clone(), user_2.clone()],
+            moves: Vec::new(&env),
+            winner: contract_id.clone(),
+        }
+    );
 }
