@@ -14,6 +14,7 @@ pub enum DataKey {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlayerStat {
+    pub player_address: Address,
     pub health: u32,
     pub attack: u32,
     pub defense: u32,
@@ -48,6 +49,7 @@ impl BattleContract {
         env.storage().instance().set(
             &DataKey::Player(user.clone()),
             &PlayerStat {
+                player_address: user.clone(),
                 health: 100,
                 attack: 10,
                 defense: 10,
@@ -57,7 +59,7 @@ impl BattleContract {
 
         let mut players: Vec<Address> = Self::get_players(env.clone());
         players.push_back(user.clone());
-        env.storage().instance().set(&DataKey::Players, &players);
+        Self::set_players(env.clone(), players);
     }
 
     pub fn get_players(env: Env) -> Vec<Address> {
@@ -76,6 +78,7 @@ impl BattleContract {
             .instance()
             .get(&DataKey::Player(user))
             .unwrap_or(PlayerStat {
+                player_address: env.current_contract_address(),
                 health: 0,
                 attack: 0,
                 defense: 0,
