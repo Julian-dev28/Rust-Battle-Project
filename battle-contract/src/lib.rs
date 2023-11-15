@@ -116,7 +116,7 @@ impl BattleContract {
         env.storage()
             .instance()
             .set(&DataKey::Player(user), &player_stat);
-        env.storage().instance().bump(u32::MIN, u32::MIN + 1);
+        env.storage().instance().bump(u32::MIN, u32::MIN + 100);
         Ok(())
     }
 
@@ -151,7 +151,7 @@ impl BattleContract {
     /// * `players` - The Vec<Address> containing the addresses of the players.
     fn set_players(env: Env, players: Vec<Address>) {
         env.storage().instance().set(&DataKey::Players, &players);
-        env.storage().instance().bump(u32::MIN, u32::MIN + 1)
+        env.storage().instance().bump(u32::MIN, u32::MIN + 100)
     }
 
     /// Gets the list of players in the battle.
@@ -308,7 +308,7 @@ impl BattleContract {
             .instance()
             .set(&DataKey::Battle(name.clone()), &battle);
 
-        env.storage().instance().bump(u32::MIN, u32::MIN + 1);
+        env.storage().instance().bump(u32::MIN, u32::MIN + 100);
         Ok(())
     }
 
@@ -344,7 +344,7 @@ impl BattleContract {
     /// * `battles` - The Vec<Symbol> containing the names of the battles.
     fn set_battles(env: Env, battles: Vec<Symbol>) -> Result<(), Error> {
         env.storage().instance().set(&DataKey::Battles, &battles);
-        env.storage().instance().bump(u32::MIN, u32::MIN + 1);
+        env.storage().instance().bump(u32::MIN, u32::MIN + 100);
         Ok(())
     }
 
