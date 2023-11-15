@@ -1,9 +1,17 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, map, vec, Address, Env, Map, String, Symbol, Vec,
+    contract, contractimpl, contracttype, map, Address, Env, Error, Map, Symbol, Vec,
 };
 
+/// Enum representing keys for data storage.
+///
+/// # Variants
+///
+/// * `Player` - The key for a player.
+/// * `Battle` - The key for a battle.
+/// * `Players` - The key for the list of players.
+/// * `Battles` - The key for the list of battles.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
@@ -13,6 +21,15 @@ pub enum DataKey {
     Battles,
 }
 
+/// Struct representing player statistics.
+///
+/// # Fields
+///
+/// * `player_address` - The address of the player.
+/// * `health` - The health of the player.
+/// * `attack` - The attack of the player.
+/// * `defense` - The defense of the player.
+/// * `in_battle` - A boolean indicating whether the player is in a battle.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlayerStat {
@@ -23,6 +40,15 @@ pub struct PlayerStat {
     pub in_battle: bool,
 }
 
+/// Struct representing a battle.
+///
+/// # Fields
+///
+/// * `battle_status` - The status of the battle.
+/// * `name` - The name of the battle.
+/// * `players` - The players in the battle.
+/// * `moves` - The moves made by the players in the battle.
+/// * `winner` - The winner of the battle.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Battle {
@@ -33,6 +59,13 @@ pub struct Battle {
     pub winner: Address,
 }
 
+/// Enum representing battle statuses.
+///
+/// # Variants
+///
+/// * `Pending` - The battle is pending.
+/// * `Started` - The battle has started.
+/// * `Ended` - The battle has ended.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
 pub enum BattleStatus {
@@ -41,11 +74,19 @@ pub enum BattleStatus {
     Ended = 2,
 }
 
+/// Contract for handling battles.
 #[contract]
 pub struct BattleContract;
 
+/// Implementation of the BattleContract.
 #[contractimpl]
 impl BattleContract {
+    /// Adds a player to the battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `user` - The address of the player to add.
     pub fn add_player(env: Env, user: Address) {
         user.require_auth();
         env.storage().instance().set(
@@ -64,17 +105,31 @@ impl BattleContract {
         Self::set_players(env.clone(), players);
     }
 
-    pub fn get_players(env: Env) -> Vec<Address> {
+    /// Sets the player statistics for a given player.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `user` - The address of the player.
+    /// * `player_stat` - The PlayerStat struct containing the player's statistics.
+    fn set_player_stats(env: Env, user: Address, player_stat: PlayerStat) -> Result<(), Error> {
         env.storage()
             .instance()
-            .get(&DataKey::Players)
-            .unwrap_or(Vec::new(&env))
+            .set(&DataKey::Player(user), &player_stat);
+        env.storage().instance().bump(u32::MIN, u32::MIN + 1);
+        Ok(())
     }
 
-    pub fn set_players(env: Env, players: Vec<Address>) {
-        env.storage().instance().set(&DataKey::Players, &players);
-    }
-
+    /// Gets the player statistics for a given player.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `user` - The address of the player.
+    ///
+    /// # Returns
+    ///
+    /// A PlayerStat struct containing the player's statistics.
     pub fn get_player_stats(env: Env, user: Address) -> PlayerStat {
         env.storage()
             .instance()
@@ -88,14 +143,47 @@ impl BattleContract {
             })
     }
 
-    pub fn set_player_stats(env: Env, user: Address, player_stat: PlayerStat) {
-        env.storage()
-            .instance()
-            .set(&DataKey::Player(user), &player_stat);
+    /// Sets the list of players in the battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `players` - The Vec<Address> containing the addresses of the players.
+    fn set_players(env: Env, players: Vec<Address>) {
+        env.storage().instance().set(&DataKey::Players, &players);
+        env.storage().instance().bump(u32::MIN, u32::MIN + 1)
     }
 
-    pub fn create_battle(env: Env, name: Symbol, user: Address) {
+    /// Gets the list of players in the battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<Address> containing the addresses of the players.
+    pub fn get_players(env: Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Players)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    /// Creates a battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    /// * `user` - The address of the player creating the battle.
+    pub fn create_battle(
+        env: Env,
+        name: Symbol,
+        user: Address,
+    ) -> (Result<(), Error>, Result<(), Error>) {
         user.require_auth();
+        // Todo user must be registered
         let contract_id = env.current_contract_address();
         env.storage().instance().set(
             &DataKey::Battle(name.clone()),
@@ -111,14 +199,24 @@ impl BattleContract {
         let mut player = Self::get_player_stats(env.clone(), user.clone());
         assert!(!player.in_battle, "Player already in battle");
         player.in_battle = true;
-        Self::set_player_stats(env.clone(), user.clone(), player);
-
         let mut battles = Self::get_battles(env.clone());
         battles.push_back(name.clone());
-        Self::set_battles(env.clone(), battles);
+
+        let response: (Result<(), Error>, Result<(), Error>) = (
+            Self::set_player_stats(env.clone(), user.clone(), player),
+            Self::set_battles(env.clone(), battles),
+        );
+        response
     }
 
-    pub fn create_auto_battle(env: Env, name: Symbol, user: Address) {
+    /// Creates an auto battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    /// * `user` - The address of the player creating the battle.
+    pub fn create_auto_battle(env: Env, name: Symbol, user: Address) -> Result<(), Error> {
         user.require_auth();
         let contract_id = env.current_contract_address();
         env.storage().instance().set(
@@ -134,10 +232,21 @@ impl BattleContract {
 
         let mut battles = Self::get_battles(env.clone());
         battles.push_back(name.clone());
-        Self::set_battles(env.clone(), battles);
+        Self::set_battles(env.clone(), battles)
     }
 
-    pub fn join_battle(env: Env, name: Symbol, user: Address) {
+    /// Joins a battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    /// * `user` - The address of the player joining the battle.
+    pub fn join_battle(
+        env: Env,
+        name: Symbol,
+        user: Address,
+    ) -> (Result<(), Error>, Result<(), Error>) {
         user.require_auth();
         let contract_id = env.current_contract_address();
         let mut battle = Self::get_battle(env.clone(), name.clone());
@@ -145,18 +254,38 @@ impl BattleContract {
         let mut player = Self::get_player_stats(env.clone(), user.clone());
         assert!(!player.in_battle, "Player already in battle");
 
-        let mut players = battle.players.clone();
-        players.get(user.clone()).unwrap_or(0);
+        let players = battle.players.clone();
         let player_1 = players.keys().get(0).unwrap_or(contract_id.clone());
-        players = map![&env, (player_1, 1), (user.clone(), 2)];
+        battle.players = map![&env, (player_1.clone(), 1), (user.clone(), 2)];
+        battle.moves = map![&env, (player_1.clone(), 0), (user.clone(), 0)];
         battle.battle_status = 1;
         player.in_battle = true;
 
-        Self::set_battle(env.clone(), name.clone(), battle);
-        Self::set_player_stats(env.clone(), user.clone(), player);
+        // battle = Battle {
+        //     battle_status: 1,
+        //     name: name.clone(),
+        //     players: map![&env, (player_1, 1), (user.clone(), 2)],
+        //     moves: map![&env, (player_1, 0), (user.clone(), 0)],
+        //     winner: contract_id.clone(),
+        // };
+        let response: (Result<(), Error>, Result<(), Error>) = (
+            Self::set_battle(env.clone(), name.clone(), battle.clone()),
+            Self::set_player_stats(env.clone(), user.clone(), player.clone()),
+        );
+
+        assert!(response == (Ok(()), Ok(())), "Error joining battle");
+
+        response
     }
 
-    pub fn challenge_bot(env: Env, user: Address, name: Symbol) {
+    /// Joins an auto battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    /// * `user` - The address of the player joining the battle.
+    pub fn challenge_bot(env: Env, user: Address, name: Symbol) -> Result<(), Error> {
         let mut battle = Self::get_battle(env.clone(), name.clone());
         assert!(battle.battle_status == 0, "Battle already started");
         let contract_id = env.current_contract_address();
@@ -164,9 +293,35 @@ impl BattleContract {
         battle.players = map![&env, (user.clone(), 1), (contract_id.clone(), 2)];
         battle.battle_status = 1;
 
-        Self::set_battle(env.clone(), name.clone(), battle);
+        Self::set_battle(env.clone(), name.clone(), battle)
     }
 
+    /// Sets a battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    /// * `battle` - The Battle struct containing the battle information.
+    fn set_battle(env: Env, name: Symbol, battle: Battle) -> Result<(), Error> {
+        env.storage()
+            .instance()
+            .set(&DataKey::Battle(name.clone()), &battle);
+
+        env.storage().instance().bump(u32::MIN, u32::MIN + 1);
+        Ok(())
+    }
+
+    /// Gets a battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    ///
+    /// # Returns
+    ///
+    /// A Battle struct containing the battle information.
     pub fn get_battle(env: Env, name: Symbol) -> Battle {
         let contract_id = env.current_contract_address();
         env.storage()
@@ -175,18 +330,33 @@ impl BattleContract {
             .unwrap_or(Battle {
                 battle_status: 0,
                 name: name.clone(),
-                players: map![&env, (1, contract_id.clone()), (2, contract_id.clone())],
+                players: map![&env, (contract_id.clone(), 1), (contract_id.clone(), 2)],
                 moves: map![&env, (contract_id.clone(), 0), (contract_id.clone(), 0)],
                 winner: env.current_contract_address(),
             })
     }
 
-    pub fn set_battle(env: Env, name: Symbol, battle: Battle) {
-        env.storage()
-            .instance()
-            .set(&DataKey::Battle(name.clone()), &battle);
+    /// Sets the list of battles.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `battles` - The Vec<Symbol> containing the names of the battles.
+    fn set_battles(env: Env, battles: Vec<Symbol>) -> Result<(), Error> {
+        env.storage().instance().set(&DataKey::Battles, &battles);
+        env.storage().instance().bump(u32::MIN, u32::MIN + 1);
+        Ok(())
     }
 
+    /// Gets the list of battles.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<Symbol> containing the names of the battles.
     pub fn get_battles(env: Env) -> Vec<Symbol> {
         env.storage()
             .instance()
@@ -194,94 +364,14 @@ impl BattleContract {
             .unwrap_or(Vec::new(&env))
     }
 
-    pub fn set_battles(env: Env, battles: Vec<Symbol>) {
-        env.storage().instance().set(&DataKey::Battles, &battles);
-    }
-
-    pub fn increase_health(env: Env, user: Address, incr: u32) -> u32 {
-        // Get the current count.
-        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
-
-        // Increment the count.
-        player_stat.health += incr;
-
-        // Save the count.
-        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
-
-        // Return the count to the caller.
-        player_stat.health
-    }
-
-    pub fn decrease_health(env: Env, user: Address, decr: u32) -> u32 {
-        // Get the current count.
-        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
-
-        // Increment the count.
-        player_stat.health -= decr;
-
-        // Save the count.
-        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
-
-        // Return the count to the caller.
-        player_stat.health
-    }
-
-    pub fn increase_attack(env: Env, user: Address, incr: u32) -> u32 {
-        // Get the current count.
-        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
-
-        // Increment the count.
-        player_stat.attack += incr;
-
-        // Save the count.
-        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
-
-        // Return the count to the caller.
-        player_stat.attack
-    }
-
-    pub fn decrease_attack(env: Env, user: Address, decr: u32) -> u32 {
-        // Get the current count.
-        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
-
-        // Increment the count.
-        player_stat.attack -= decr;
-
-        // Save the count.
-        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
-
-        // Return the count to the caller.
-        player_stat.attack
-    }
-
-    pub fn increase_defense(env: Env, user: Address, incr: u32) -> u32 {
-        // Get the current count.
-        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
-
-        // Increment the count.
-        player_stat.defense += incr;
-
-        // Save the count.
-        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
-
-        // Return the count to the caller.
-        player_stat.defense
-    }
-
-    pub fn decrease_defense(env: Env, user: Address, decr: u32) -> u32 {
-        // Get the current count.
-        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
-
-        // Increment the count.
-        player_stat.defense -= decr;
-
-        // Save the count.
-        Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
-
-        // Return the count to the caller.
-        player_stat.defense
-    }
-
+    /// Handles player's attack or defend choice in a battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `user` - The address of the player making the choice.
+    /// * `choice` - The choice made by the player.
+    /// * `battle_name` - The name of the battle in which the choice is made.
     pub fn attack_or_defend_choice(env: Env, user: Address, choice: u64, battle_name: Symbol) {
         user.require_auth();
         let contract_id = env.current_contract_address();
@@ -297,58 +387,154 @@ impl BattleContract {
             "You are not in this battle"
         ); // Require that player is in the battle
 
-        Self::register_player_move(env.clone(), user.clone(), choice, battle_name.clone());
+        let _ = Self::register_player_move(env.clone(), user.clone(), choice, battle_name.clone());
 
         let battle = Self::get_battle(env.clone(), battle_name.clone());
         let moves_left = 2
             - (battle.moves.get(user.clone()).unwrap_or(0) == 0) as u64
             - (battle.moves.get(contract_id.clone()).unwrap_or(0) == 0) as u64;
 
-        // if (moves_left == 0) {
-        //     Self::await_battle_results(env.clone(), battle_name.clone());
-        // }
+        if moves_left == 0 {
+            Self::await_battle_results(env.clone(), battle_name.clone(), user.clone());
+        }
     }
 
+    /// A private function to await battle results.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    /// * `user` - The address of the user.
+    fn await_battle_results(env: Env, name: Symbol, _user: Address) {
+        let battle = Self::get_battle(env.clone(), name.clone());
+        let user_1 = battle
+            .players
+            .keys()
+            .get(0)
+            .unwrap_or(env.current_contract_address());
+        let user_2 = battle
+            .players
+            .keys()
+            .get(1)
+            .unwrap_or(env.current_contract_address());
+
+        assert!(
+            battle.moves.get(user_1.clone()).unwrap_or(0) != 0
+                && battle.moves.get(user_2.clone()).unwrap_or(0) != 0,
+            "Players have not made their moves yet"
+        );
+    }
+
+    /// Registers a player's move in the battle.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `user` - The address of the player making the move.
+    /// * `choice` - The choice made by the player.
+    /// * `battle_name` - The name of the battle in which the move is made.
+    ///
+    /// # Returns
+    ///
+    /// An `Result<(), Error>` indicating the result of the operation.
     fn register_player_move(
         env: Env,
         user: Address,
         choice: u64,
         battle_name: Symbol,
-    ) -> Result<(), String> {
+    ) -> (Result<(), Error>, Result<(), Error>) {
         let mut battle = Self::get_battle(env.clone(), battle_name.clone());
         Map::set(&mut battle.moves, user.clone(), choice);
-        Self::set_battle(env.clone(), battle_name.clone(), battle);
-        Ok(())
+
+        let set_battle_result = Self::set_battle(env.clone(), battle_name.clone(), battle);
+        let result: (Result<(), Error>, Result<(), Error>) = (set_battle_result, Ok(()));
+        result
     }
 
-    //     function attackOrDefendChoice(uint8 _choice, string memory _battleName) external {
-    //     Battle memory _battle = getBattle(_battleName);
+    pub fn increase_health(env: Env, user: Address, incr: u32) -> u32 {
+        // Get the current count.
+        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 
-    //     require(
-    //         _battle.battleStatus == BattleStatus.STARTED,
-    //         "Battle not started. Please tell another player to join the battle"
-    //     ); // Require that battle has started
-    //     require(
-    //         _battle.battleStatus != BattleStatus.ENDED,
-    //         "Battle has already ended"
-    //     ); // Require that battle has not ended
-    //     require(
-    //       msg.sender == _battle.players[0] || msg.sender == _battle.players[1],
-    //       "You are not in this battle"
-    //     ); // Require that player is in the battle
+        // Increment the count.
+        player_stat.health += incr;
 
-    //     require(_battle.moves[_battle.players[0] == msg.sender ? 0 : 1] == 0, "You have already made a move!");
+        // Save the count.
+        let _ = Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
 
-    //     _registerPlayerMove(_battle.players[0] == msg.sender ? 0 : 1, _choice, _battleName);
+        // Return the count to the caller.
+        player_stat.health
+    }
 
-    //     _battle = getBattle(_battleName);
-    //     uint _movesLeft = 2 - (_battle.moves[0] == 0 ? 0 : 1) - (_battle.moves[1] == 0 ? 0 : 1);
-    //     emit BattleMove(_battleName, _movesLeft == 1 ? true : false);
+    pub fn decrease_health(env: Env, user: Address, decr: u32) -> u32 {
+        // Get the current count.
+        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 
-    //     if(_movesLeft == 0) {
-    //       _awaitBattleResults(_battleName);
-    //     }
-    //   }
+        // Increment the count.
+        player_stat.health -= decr;
+
+        // Save the count.
+        let _ = Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
+
+        // Return the count to the caller.
+        player_stat.health
+    }
+
+    pub fn increase_attack(env: Env, user: Address, incr: u32) -> u32 {
+        // Get the current count.
+        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
+
+        // Increment the count.
+        player_stat.attack += incr;
+
+        // Save the count.
+        let _ = Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
+
+        // Return the count to the caller.
+        player_stat.attack
+    }
+
+    pub fn decrease_attack(env: Env, user: Address, decr: u32) -> u32 {
+        // Get the current count.
+        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
+
+        // Increment the count.
+        player_stat.attack -= decr;
+
+        // Save the count.
+        let _ = Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
+
+        // Return the count to the caller.
+        player_stat.attack
+    }
+
+    pub fn increase_defense(env: Env, user: Address, incr: u32) -> u32 {
+        // Get the current count.
+        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
+
+        // Increment the count.
+        player_stat.defense += incr;
+
+        // Save the count.
+        let _ = Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
+
+        // Return the count to the caller.
+        player_stat.defense
+    }
+
+    pub fn decrease_defense(env: Env, user: Address, decr: u32) -> u32 {
+        // Get the current count.
+        let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
+
+        // Increment the count.
+        player_stat.defense -= decr;
+
+        // Save the count.
+        let _ = Self::set_player_stats(env.clone(), user.clone(), player_stat.clone());
+
+        // Return the count to the caller.
+        player_stat.defense
+    }
 }
 
 #[cfg(test)]
