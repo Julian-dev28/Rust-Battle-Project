@@ -21,7 +21,7 @@ fn setup_test() -> (
     env.mock_all_auths();
     env.budget().reset_unlimited();
     let contract_id = env.register_contract(None, BattleContract);
-    // let contract_id = env.register_contract_wasm(None, battle::WASM);
+    // let contract_id: Address = env.register_contract_wasm(None, battle::WASM);
     let user_1 = Address::random(&env);
     let user_2 = Address::random(&env);
     let client = BattleContractClient::new(&env, &contract_id);
@@ -41,6 +41,7 @@ fn test_enum() {
         client.get_player_stats(&user_1),
         PlayerStat {
             player_address: user_1.clone(),
+            sword_class: 0,
             health: 101,
             attack: 10,
             defense: 10,
@@ -53,6 +54,7 @@ fn test_enum() {
         client.get_player_stats(&user_1),
         PlayerStat {
             player_address: user_1.clone(),
+            sword_class: 0,
             health: 103,
             attack: 10,
             defense: 10,
@@ -66,6 +68,7 @@ fn test_enum() {
         client.get_player_stats(&user_2),
         PlayerStat {
             player_address: user_2.clone(),
+            sword_class: 0,
             health: 110,
             attack: 10,
             defense: 10,
@@ -78,6 +81,7 @@ fn test_enum() {
         client.get_player_stats(&user_2),
         PlayerStat {
             player_address: user_2.clone(),
+            sword_class: 0,
             health: 120,
             attack: 10,
             defense: 10,
@@ -97,6 +101,7 @@ fn test_decrement() {
         client.get_player_stats(&user_1),
         PlayerStat {
             player_address: user_1.clone(),
+            sword_class: 0,
             health: 110,
             attack: 10,
             defense: 10,
@@ -109,6 +114,7 @@ fn test_decrement() {
         client.get_player_stats(&user_1),
         PlayerStat {
             player_address: user_1.clone(),
+            sword_class: 0,
             health: 101,
             attack: 10,
             defense: 10,
@@ -125,6 +131,7 @@ fn create_player() {
         client.get_player_stats(&user_1),
         PlayerStat {
             player_address: user_1.clone(),
+            sword_class: 0,
             health: 100,
             attack: 10,
             defense: 10,

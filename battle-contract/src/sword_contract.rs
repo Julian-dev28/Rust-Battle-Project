@@ -1,7 +1,8 @@
 use crate::balance::{receive_balance, spend_balance};
-use crate::storage_types::DataKey;
+use crate::storage_types::NFTDataKey;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
 
+// This contract is meant to be used for educational purposes only.
 pub trait NFTCollectionFactory {
     // Admin interface – privileged functions.
     fn initialize(env: Env, admin: Address, collection_name: String, collection_symbol: String);
@@ -13,15 +14,13 @@ pub trait NFTCollectionFactory {
         symbol: String,
         token_id: u32,
         amount: i128,
-        short_uri: String,
-        detailed_uri: String,
-        long_uri: String,
+        token_uri: String,
     ) -> Address; // Returns the address of the minted NFT
 
     fn melt_blade(env: Env, from: Address, token_id: u32, amount: i128);
 
     // Descriptive Interface
-    fn get_metadata(env: Env) -> Metadata;
+    fn get_token_metadata(env: Env) -> TokenMetadata;
 
     fn get_collection_metadata(env: Env) -> CollectionMetadata;
 
@@ -31,10 +30,8 @@ pub trait NFTCollectionFactory {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 // Metadata struct to hold NFT metadata, including descriptions and IPFS hashes.
-pub struct Metadata {
-    short_description_uri: String, // IPFS hash or URL
-    long_description_uri: String,  // IPFS hash or URL
-    data_file_uri: String,         // IPFS hash or URL
+pub struct TokenMetadata {
+    token_uri: String, // IPFS hash or URL
 }
 
 #[contracttype]
@@ -62,10 +59,10 @@ impl NFTCollectionFactory for SwordContract {
             name: collection_name,
             symbol: collection_symbol,
         };
-        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&NFTDataKey::Admin, &admin);
         env.storage()
             .instance()
-            .set(&DataKey::Metadata, &collection_metadata);
+            .set(&NFTDataKey::Metadata, &collection_metadata);
     }
 
     fn mint_nft(
@@ -75,18 +72,14 @@ impl NFTCollectionFactory for SwordContract {
         nft_symbol: String,
         token_id: u32,
         amount: i128,
-        short_uri: String,
-        detailed_uri: String,
-        long_uri: String,
+        token_uri: String,
     ) -> Address {
         Self::check_nonnegative_amount(amount);
         // Mint a new NFT.
-        let nft_metadata = Metadata {
-            short_description_uri: short_uri,
-            long_description_uri: detailed_uri,
-            data_file_uri: long_uri,
+        let nft_metadata: TokenMetadata = TokenMetadata {
+            token_uri: token_uri,
         };
-        let nft_metadata_key = DataKey::Metadata;
+        let nft_metadata_key = NFTDataKey::Metadata;
         env.storage()
             .instance()
             .set(&nft_metadata_key, &nft_metadata);
@@ -94,14 +87,14 @@ impl NFTCollectionFactory for SwordContract {
         let _collection_meta_data: CollectionMetadata = env
             .storage()
             .instance()
-            .get(&DataKey::CollectionMetadata)
+            .get(&NFTDataKey::CollectionMetadata)
             .unwrap();
 
         let collection_metadata = CollectionMetadata {
             name: nft_name,
             symbol: nft_symbol,
         };
-        let collection_metadata_key = DataKey::CollectionMetadata;
+        let collection_metadata_key = NFTDataKey::CollectionMetadata;
         env.storage()
             .instance()
             .set(&collection_metadata_key, &collection_metadata);
@@ -120,13 +113,13 @@ impl NFTCollectionFactory for SwordContract {
         env.storage().instance().bump(100, 100);
     }
 
-    fn get_metadata(env: Env) -> Metadata {
+    fn get_token_metadata(env: Env) -> TokenMetadata {
         // Get the metadata of an NFT.
-        env.storage().instance().get(&DataKey::Metadata).unwrap()
+        env.storage().instance().get(&NFTDataKey::Metadata).unwrap()
     }
 
     fn get_collection_metadata(env: Env) -> CollectionMetadata {
         // Get the metadata of an NFT.
-        env.storage().instance().get(&DataKey::Metadata).unwrap()
+        env.storage().instance().get(&NFTDataKey::Metadata).unwrap()
     }
 }

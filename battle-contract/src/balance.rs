@@ -1,9 +1,9 @@
-use crate::storage_types::{DataKey, BALANCE_BUMP_AMOUNT};
+use crate::storage_types::{NFTDataKey, BALANCE_BUMP_AMOUNT};
 use soroban_sdk::{map, Address, Env};
 
 pub fn read_balance(e: &Env, addr: Address) -> i128 {
-    let key = DataKey::Balance(addr);
-    if let Some(balance) = e.storage().persistent().get::<DataKey, i128>(&key) {
+    let key = NFTDataKey::Balance(addr);
+    if let Some(balance) = e.storage().persistent().get::<NFTDataKey, i128>(&key) {
         e.storage()
             .persistent()
             .bump(&key, BALANCE_BUMP_AMOUNT, BALANCE_BUMP_AMOUNT + 100);
@@ -14,9 +14,16 @@ pub fn read_balance(e: &Env, addr: Address) -> i128 {
 }
 
 fn write_balance(e: &Env, addr: Address, token_id: u32, amount: i128) {
-    let key = DataKey::Balance(addr);
-    let token_balance_map = map![&e, (token_id, amount)];
-    let get_token_key = token_balance_map.keys().get(token_id).unwrap();
+    let key = NFTDataKey::Balance(addr);
+    let token_balance_map: soroban_sdk::Map<u32, i128> = e
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(map![&e, (token_id, amount)]);
+    let _token_key = token_balance_map
+        .keys()
+        .set(token_id, amount.try_into().unwrap());
+
     e.storage().persistent().set(&key, &token_balance_map);
     e.storage()
         .persistent()
@@ -43,15 +50,15 @@ pub fn spend_balance(e: &Env, addr: Address, token_id: u32, amount: i128) {
 }
 
 pub fn is_authorized(e: &Env, addr: Address) -> bool {
-    let key = DataKey::State(addr);
-    if let Some(state) = e.storage().persistent().get::<DataKey, bool>(&key) {
+    let key = NFTDataKey::State(addr);
+    if let Some(state) = e.storage().persistent().get::<NFTDataKey, bool>(&key) {
         state
     } else {
         true
     }
 }
 
-pub fn write_authorization(e: &Env, addr: Address, is_authorized: bool) {
-    let key = DataKey::State(addr);
-    e.storage().persistent().set(&key, &is_authorized);
-}
+// pub fn write_authorization(e: &Env, addr: Address, is_authorized: bool) {
+//     let key = NFTDataKey::State(addr);
+//     e.storage().persistent().set(&key, &is_authorized);
+// }

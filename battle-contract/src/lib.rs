@@ -5,8 +5,9 @@ mod storage_types;
 mod sword_contract;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, map, Address, Env, Error, Map, Symbol, Vec,
+    contract, contractimpl, contracttype, map, token, Address, Env, Error, Map, String, Symbol, Vec,
 };
+use sword_contract::{CollectionMetadata, TokenMetadata};
 
 /// Enum representing keys for data storage.
 ///
@@ -38,6 +39,7 @@ pub enum DataKey {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlayerStat {
     pub player_address: Address,
+    pub sword_class: u32,
     pub health: u32,
     pub attack: u32,
     pub defense: u32,
@@ -78,6 +80,21 @@ pub enum BattleStatus {
     Ended = 2,
 }
 
+/// Enum representing sword classes.
+///
+/// # Variants
+///
+/// * `Longsword` - versatile two-handed sword known for its balance of offense and defense.
+/// * `Sabre` - Curved, one-handed sword known for its slashing capabilities and agility.
+/// * `Claymore` - Massive, two-handed sword known for its exceptional cutting power and reach.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u32)]
+pub enum SwordClass {
+    Longsword = 0,
+    Sabre = 1,
+    Claymore = 2,
+}
+
 /// Contract for handling battles.
 #[contract]
 pub struct BattleContract;
@@ -97,6 +114,7 @@ impl BattleContract {
             &DataKey::Player(user.clone()),
             &PlayerStat {
                 player_address: user.clone(),
+                sword_class: 0,
                 health: 100,
                 attack: 10,
                 defense: 10,
@@ -140,6 +158,7 @@ impl BattleContract {
             .get(&DataKey::Player(user))
             .unwrap_or(PlayerStat {
                 player_address: env.current_contract_address(),
+                sword_class: 0,
                 health: 0,
                 attack: 0,
                 defense: 0,
@@ -172,6 +191,74 @@ impl BattleContract {
             .instance()
             .get(&DataKey::Players)
             .unwrap_or(Vec::new(&env))
+    }
+
+    // Longsword:
+    // Health: +10 HP - Wielding a longsword grants the player an additional 10 hit points, providing extra survivability.
+    // Attack: +5 ATK - The longsword's extended reach and balanced design grant a 5-point increase in attack power.
+    // Defense: +3 DEF - The longsword's hilt and guard offer decent protection, adding 3 points to the player's defense.
+
+    // Sabre:
+    // Health: -3 HP - The sabre's focus on speed over protection results in a slight 3 HP reduction.
+    // Attack: +10 ATK - Sabres excel in fast and precise slashing attacks, providing a substantial 10-point boost to the player's attack power.
+    // Defense: +2 DEF - Although not the most defensive option, the sabre's curved design and guard offer a 2-point increase in defense.
+
+    // Claymore:
+    // Health: +7 HP - Wielding a claymore grants the player an additional 7 hit points, enhancing their durability.
+    // Attack: +11 ATK - The claymore's size and sweeping strikes provide a significant 11-point boost to the player's attack power.
+    // Defense: -3 DEF - Due to its size and lack of a guard, the claymore reduces the player's defense by 3 points.
+
+    pub fn forge_blade(env: Env, to: Address, class: u32) -> Result<(), Error> {
+        to.require_auth();
+
+        assert!(!class > 3 && class > 0, "Invalid sword class");
+
+        let _token_uri: String = match class {
+            0 => String::from_slice(&env, "https://example/token0"),
+            1 => String::from_slice(&env, "https://example/token1"),
+            2 => String::from_slice(&env, "https://example/token2"),
+            _ => String::from_slice(&env, "https://example/token0"),
+        };
+
+        let _name: String = match class {
+            0 => String::from_slice(&env, "Longsword"),
+            1 => String::from_slice(&env, "Sabre"),
+            2 => String::from_slice(&env, "Claymore"),
+            _ => String::from_slice(&env, "Longsword"),
+        };
+
+        let _symbol: String = match class {
+            0 => String::from_slice(&env, "LS"),
+            1 => String::from_slice(&env, "S"),
+            2 => String::from_slice(&env, "C"),
+            _ => String::from_slice(&env, "LS"),
+        };
+
+        let mut player = Self::get_player_stats(env.clone(), to.clone());
+        match class {
+            0 => {
+                player.health += 10;
+                player.attack += 5;
+                player.defense += 3;
+            }
+            1 => {
+                player.health -= 3;
+                player.attack += 10;
+                player.defense += 2;
+            }
+            2 => {
+                player.health += 7;
+                player.attack += 11;
+                player.defense -= 3;
+            }
+            _ => {}
+        }
+
+        player.sword_class = class;
+        let sword_contract_client =
+            sword_contract::SwordContractClient::new(&env, &env.current_contract_address());
+        sword_contract_client.mint_nft(&to, &_name, &_symbol, &class, &1, &_token_uri);
+        Self::set_player_stats(env.clone(), to.clone(), player)
     }
 
     /// Creates a battle.

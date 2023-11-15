@@ -1,6 +1,6 @@
 use soroban_sdk::{contracttype, Address};
 
-pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 34560; // 2 days
+// pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 34560; // 2 days
 pub(crate) const BALANCE_BUMP_AMOUNT: u32 = 518400; // 30 days
 
 #[derive(Clone)]
@@ -18,7 +18,7 @@ pub struct AllowanceValue {
 
 #[derive(Clone)]
 #[contracttype]
-pub enum DataKey {
+pub enum NFTDataKey {
     Allowance(AllowanceDataKey),
     Balance(Address),
     Nonce(Address),
