@@ -13,7 +13,7 @@ pub fn read_balance(e: &Env, addr: Address) -> i128 {
     }
 }
 
-fn write_balance(e: &Env, addr: Address, amount: i128) {
+fn write_balance(e: &Env, addr: Address, _token_id: i128, amount: i128) {
     let key = DataKey::Balance(addr);
     e.storage().persistent().set(&key, &amount);
     e.storage()
@@ -21,15 +21,15 @@ fn write_balance(e: &Env, addr: Address, amount: i128) {
         .bump(&key, BALANCE_BUMP_AMOUNT, BALANCE_BUMP_AMOUNT + 100);
 }
 
-pub fn receive_balance(e: &Env, addr: Address, amount: i128) {
+pub fn receive_balance(e: &Env, addr: Address, token_id: i128, amount: i128) {
     let balance = read_balance(e, addr.clone());
     if !is_authorized(e, addr.clone()) {
         panic!("can't receive when deauthorized");
     }
-    write_balance(e, addr, balance + amount);
+    write_balance(e, addr, token_id, balance + amount);
 }
 
-pub fn spend_balance(e: &Env, addr: Address, amount: i128) {
+pub fn spend_balance(e: &Env, addr: Address, token_id: i128, amount: i128) {
     let balance = read_balance(e, addr.clone());
     if !is_authorized(e, addr.clone()) {
         panic!("can't spend when deauthorized");
@@ -37,7 +37,7 @@ pub fn spend_balance(e: &Env, addr: Address, amount: i128) {
     if balance < amount {
         panic!("insufficient balance");
     }
-    write_balance(e, addr, balance - amount);
+    write_balance(e, addr, token_id, balance - amount);
 }
 
 pub fn is_authorized(e: &Env, addr: Address) -> bool {

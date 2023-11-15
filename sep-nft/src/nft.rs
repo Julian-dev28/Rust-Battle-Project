@@ -1,9 +1,8 @@
 use crate::balance::{receive_balance, spend_balance};
 use crate::storage_types::DataKey;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, Address, Env, String,
 };
-const METADATA: Symbol = symbol_short!("METADATA");
 
 pub trait NFTCollectionFactory {
     // Admin interface – privileged functions.
@@ -14,13 +13,14 @@ pub trait NFTCollectionFactory {
         to: Address,
         name: String,
         symbol: String,
+        token_id: i128,
         amount: i128,
         short_uri: String,
         detailed_uri: String,
         long_uri: String,
     ) -> Address; // Returns the address of the minted NFT
 
-    fn return_to_valhalla(env: Env, from: Address, amount: i128);
+    fn melt_blade(env: Env, from: Address, token_id: i128, amount: i128);
 
     // Descriptive Interface
     fn get_metadata(env: Env) -> Metadata;
@@ -45,7 +45,6 @@ pub struct Metadata {
 pub struct CollectionMetadata {
     name: String,
     symbol: String,
-    nfts: Vec<Address>, // Addresses of all NFTs minted by this collection
 }
 
 #[contract]
@@ -64,12 +63,11 @@ impl NFTCollectionFactory for SwordContract {
         let collection_metadata = CollectionMetadata {
             name: collection_name,
             symbol: collection_symbol,
-            nfts: Vec::new(&env),
         };
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
-            .set(&METADATA, &collection_metadata);
+            .set(&DataKey::Metadata, &collection_metadata);
     }
 
     fn mint_nft(
@@ -77,6 +75,7 @@ impl NFTCollectionFactory for SwordContract {
         to: Address,
         nft_name: String,
         nft_symbol: String,
+        token_id: i128,
         amount: i128,
         short_uri: String,
         detailed_uri: String,
@@ -94,31 +93,31 @@ impl NFTCollectionFactory for SwordContract {
             .instance()
             .set(&nft_metadata_key, &nft_metadata);
 
-        let nfts_list = env
+        let _collection_meta_data: CollectionMetadata = env
             .storage()
             .instance()
-            .get::<Symbol, Vec<Address>>(&METADATA)
-            .unwrap_or(Vec::new(&env));
+            .get(&DataKey::CollectionMetadata)
+            .unwrap();
+
         let collection_metadata = CollectionMetadata {
             name: nft_name,
             symbol: nft_symbol,
-            nfts: nfts_list,
         };
         let collection_metadata_key = DataKey::CollectionMetadata;
         env.storage()
             .instance()
             .set(&collection_metadata_key, &collection_metadata);
 
-        receive_balance(&env, to.clone(), amount);
+        receive_balance(&env, to.clone(), token_id, amount);
         env.storage().instance().bump(100, 100);
 
         to
     }
 
-    fn return_to_valhalla(env: Env, from: Address, amount: i128) {
+    fn melt_blade(env: Env, from: Address, token_id: i128, amount: i128) {
         // Burn an NFT.
         from.require_auth();
-        spend_balance(&env, from, amount);
+        spend_balance(&env, from, token_id, amount);
 
         env.storage().instance().bump(100, 100);
     }
