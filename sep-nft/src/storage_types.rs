@@ -23,5 +23,7 @@ pub enum DataKey {
     Balance(Address),
     Nonce(Address),
     State(Address),
+    Metadata,
+    CollectionMetadata,
     Admin,
 }
