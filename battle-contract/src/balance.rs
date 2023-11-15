@@ -1,5 +1,5 @@
 use crate::storage_types::{DataKey, BALANCE_BUMP_AMOUNT};
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{map, Address, Env};
 
 pub fn read_balance(e: &Env, addr: Address) -> i128 {
     let key = DataKey::Balance(addr);
@@ -13,15 +13,17 @@ pub fn read_balance(e: &Env, addr: Address) -> i128 {
     }
 }
 
-fn write_balance(e: &Env, addr: Address, _token_id: i128, amount: i128) {
+fn write_balance(e: &Env, addr: Address, token_id: u32, amount: i128) {
     let key = DataKey::Balance(addr);
-    e.storage().persistent().set(&key, &amount);
+    let token_balance_map = map![&e, (token_id, amount)];
+    let get_token_key = token_balance_map.keys().get(token_id).unwrap();
+    e.storage().persistent().set(&key, &token_balance_map);
     e.storage()
         .persistent()
         .bump(&key, BALANCE_BUMP_AMOUNT, BALANCE_BUMP_AMOUNT + 100);
 }
 
-pub fn receive_balance(e: &Env, addr: Address, token_id: i128, amount: i128) {
+pub fn receive_balance(e: &Env, addr: Address, token_id: u32, amount: i128) {
     let balance = read_balance(e, addr.clone());
     if !is_authorized(e, addr.clone()) {
         panic!("can't receive when deauthorized");
@@ -29,7 +31,7 @@ pub fn receive_balance(e: &Env, addr: Address, token_id: i128, amount: i128) {
     write_balance(e, addr, token_id, balance + amount);
 }
 
-pub fn spend_balance(e: &Env, addr: Address, token_id: i128, amount: i128) {
+pub fn spend_balance(e: &Env, addr: Address, token_id: u32, amount: i128) {
     let balance = read_balance(e, addr.clone());
     if !is_authorized(e, addr.clone()) {
         panic!("can't spend when deauthorized");

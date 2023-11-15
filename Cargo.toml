@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["battle-contract", "sep-nft"]
+members = ["battle-contract"]
 
 [profile.release]
 opt-level = "z"

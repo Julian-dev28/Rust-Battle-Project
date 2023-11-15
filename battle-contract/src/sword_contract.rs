@@ -1,8 +1,6 @@
 use crate::balance::{receive_balance, spend_balance};
 use crate::storage_types::DataKey;
-use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
 
 pub trait NFTCollectionFactory {
     // Admin interface – privileged functions.
@@ -13,14 +11,14 @@ pub trait NFTCollectionFactory {
         to: Address,
         name: String,
         symbol: String,
-        token_id: i128,
+        token_id: u32,
         amount: i128,
         short_uri: String,
         detailed_uri: String,
         long_uri: String,
     ) -> Address; // Returns the address of the minted NFT
 
-    fn melt_blade(env: Env, from: Address, token_id: i128, amount: i128);
+    fn melt_blade(env: Env, from: Address, token_id: u32, amount: i128);
 
     // Descriptive Interface
     fn get_metadata(env: Env) -> Metadata;
@@ -75,7 +73,7 @@ impl NFTCollectionFactory for SwordContract {
         to: Address,
         nft_name: String,
         nft_symbol: String,
-        token_id: i128,
+        token_id: u32,
         amount: i128,
         short_uri: String,
         detailed_uri: String,
@@ -114,7 +112,7 @@ impl NFTCollectionFactory for SwordContract {
         to
     }
 
-    fn melt_blade(env: Env, from: Address, token_id: i128, amount: i128) {
+    fn melt_blade(env: Env, from: Address, token_id: u32, amount: i128) {
         // Burn an NFT.
         from.require_auth();
         spend_balance(&env, from, token_id, amount);
