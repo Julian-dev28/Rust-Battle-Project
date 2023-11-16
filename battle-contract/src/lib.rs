@@ -468,6 +468,7 @@ impl BattleContract {
     /// * `battle_name` - The name of the battle in which the choice is made.
     pub fn attack_or_defend_choice(env: Env, user: Address, choice: u64, battle_name: Symbol) {
         user.require_auth();
+        assert!(choice == 1 || choice == 2, "Invalid choice");
         let contract_id = env.current_contract_address();
         let battle = Self::get_battle(env.clone(), battle_name.clone());
 
@@ -475,12 +476,15 @@ impl BattleContract {
             battle.battle_status == 1,
             "Battle not started. Please tell another player to join the battle"
         ); // Require that battle has started
-        assert!(battle.battle_status != 2, "Battle has already ended"); // Require that battle has not ended
         assert!(
             battle.players.contains_key(user.clone()),
             "You are not in this battle"
         ); // Require that player is in the battle
-
+        assert_eq!(
+            battle.moves.get(user.clone()).unwrap_or(0),
+            0,
+            "You have already made your move"
+        ); // Require that player has not made a move yet
         let _ = Self::register_player_move(env.clone(), user.clone(), choice, battle_name.clone());
 
         let battle = Self::get_battle(env.clone(), battle_name.clone());
@@ -491,33 +495,6 @@ impl BattleContract {
         if moves_left == 0 {
             Self::await_battle_results(env.clone(), battle_name.clone(), user.clone());
         }
-    }
-
-    /// A private function to await battle results.
-    ///
-    /// # Arguments
-    ///
-    /// * `env` - The contract execution environment.
-    /// * `name` - The name of the battle.
-    /// * `user` - The address of the user.
-    fn await_battle_results(env: Env, name: Symbol, _user: Address) {
-        let battle = Self::get_battle(env.clone(), name.clone());
-        let user_1 = battle
-            .players
-            .keys()
-            .get(0)
-            .unwrap_or(env.current_contract_address());
-        let user_2 = battle
-            .players
-            .keys()
-            .get(1)
-            .unwrap_or(env.current_contract_address());
-
-        assert!(
-            battle.moves.get(user_1.clone()).unwrap_or(0) != 0
-                && battle.moves.get(user_2.clone()).unwrap_or(0) != 0,
-            "Players have not made their moves yet"
-        );
     }
 
     /// Registers a player's move in the battle.
@@ -546,7 +523,136 @@ impl BattleContract {
         result
     }
 
-    pub fn increase_health(env: Env, user: Address, incr: u32) -> u32 {
+    /// A private function to await battle results.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The contract execution environment.
+    /// * `name` - The name of the battle.
+    /// * `user` - The address of the user.
+    fn await_battle_results(env: Env, name: Symbol, _user: Address) {
+        let mut battle = Self::get_battle(env.clone(), name.clone());
+        let user_1 = battle
+            .players
+            .keys()
+            .get(0)
+            .unwrap_or(env.current_contract_address());
+        let user_2 = battle
+            .players
+            .keys()
+            .get(1)
+            .unwrap_or(env.current_contract_address());
+
+        assert!(
+            battle.moves.get(user_1.clone()).unwrap_or(0) != 0
+                && battle.moves.get(user_2.clone()).unwrap_or(0) != 0,
+            "Players have not made their moves yet"
+        );
+
+        // Resolve battle
+        let user_1_move = battle.moves.get(user_1.clone()).unwrap_or(0);
+        let user_2_move = battle.moves.get(user_2.clone()).unwrap_or(0);
+
+        let mut user_1_stats = Self::get_player_stats(env.clone(), user_1.clone());
+        let mut user_2_stats = Self::get_player_stats(env.clone(), user_2.clone());
+
+        let user_1_attack = user_1_stats.attack;
+        let user_2_attack = user_2_stats.attack;
+
+        let user_1_defense = user_1_stats.defense;
+        let user_2_defense = user_2_stats.defense;
+
+        let user_1_health = user_1_stats.health;
+        let user_2_health = user_2_stats.health;
+        let user_2_phad: u32 = user_2_health + user_2_defense;
+        let user_1_phad: u32 = user_1_health + user_1_defense;
+
+        if user_1_move == 1 && user_2_move == 1 {
+            if user_1_attack >= user_2_health {
+                Self::end_battle(env.clone(), name.clone(), user_1.clone());
+            } else if user_2_attack >= user_1_health {
+                Self::end_battle(env.clone(), name.clone(), user_2.clone());
+            } else {
+                let _ = Self::decrease_health(env.clone(), user_1.clone(), user_2_attack);
+                let _ = Self::decrease_health(env.clone(), user_2.clone(), user_1_attack);
+            }
+        } else if user_1_move == 1 && user_2_move == 2 {
+            if user_1_attack >= user_2_phad {
+                Self::end_battle(env.clone(), name.clone(), user_1.clone());
+            } else {
+                let mut health_after_attack;
+
+                if user_2_defense > user_1_attack {
+                    health_after_attack = user_2_health;
+                } else {
+                    health_after_attack = user_2_phad - user_1_attack;
+                }
+                // env.storage()
+                //     .instance()
+                //     .set(&user_2_stats.health, &health_after_attack)
+                user_2_stats.health = health_after_attack;
+                let _ = Self::set_player_stats(env.clone(), user_2.clone(), user_2_stats);
+            }
+        } else if user_1_move == 2 && user_2_move == 1 {
+            if user_2_attack >= user_1_phad {
+                Self::end_battle(env.clone(), name.clone(), user_2.clone());
+            } else {
+                let health_after_attack;
+
+                if user_1_defense > user_2_attack {
+                    health_after_attack = user_1_health;
+                } else {
+                    health_after_attack = user_1_phad - user_2_attack;
+                }
+                //     env.storage()
+                //         .instance()
+                //         .set(&user_1_stats.health, &health_after_attack)
+                user_1_stats.health = health_after_attack;
+                let _ = Self::set_player_stats(env.clone(), user_1.clone(), user_1_stats);
+            }
+        } else if user_1_move == 2 && user_2_move == 2 {
+            Self::increase_health(env.clone(), user_1.clone(), 2);
+            Self::increase_health(env.clone(), user_2.clone(), 2);
+        }
+
+        battle.moves = map![&env, (user_1.clone(), 0), (user_2.clone(), 0)];
+        let _ = Self::set_battle(env.clone(), name.clone(), battle);
+    }
+
+    fn end_battle(env: Env, name: Symbol, winner: Address) {
+        let mut battle = Self::get_battle(env.clone(), name.clone());
+        battle.battle_status = 2;
+        battle.winner = winner.clone();
+
+        let user_1 = battle
+            .players
+            .keys()
+            .get(0)
+            .unwrap_or(env.current_contract_address());
+        let user_2 = battle
+            .players
+            .keys()
+            .get(1)
+            .unwrap_or(env.current_contract_address());
+
+        // Resolve battle
+        let user_1_move = battle.moves.get(user_1.clone()).unwrap_or(0);
+        let user_2_move = battle.moves.get(user_2.clone()).unwrap_or(0);
+
+        let mut user_1_stats = Self::get_player_stats(env.clone(), user_1.clone());
+        let mut user_2_stats = Self::get_player_stats(env.clone(), user_2.clone());
+
+        user_1_stats.in_battle = false;
+        user_1_stats.health = 100;
+
+        user_2_stats.in_battle = false;
+        user_2_stats.health = 100;
+
+        let _ = Self::set_player_stats(env.clone(), user_1.clone(), user_1_stats);
+        let _ = Self::set_battle(env.clone(), name.clone(), battle);
+    }
+
+    fn increase_health(env: Env, user: Address, incr: u32) -> u32 {
         // Get the current count.
         let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 
@@ -560,7 +666,7 @@ impl BattleContract {
         player_stat.health
     }
 
-    pub fn decrease_health(env: Env, user: Address, decr: u32) -> u32 {
+    fn decrease_health(env: Env, user: Address, decr: u32) -> u32 {
         // Get the current count.
         let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 
@@ -574,7 +680,7 @@ impl BattleContract {
         player_stat.health
     }
 
-    pub fn increase_attack(env: Env, user: Address, incr: u32) -> u32 {
+    fn increase_attack(env: Env, user: Address, incr: u32) -> u32 {
         // Get the current count.
         let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 
@@ -588,7 +694,7 @@ impl BattleContract {
         player_stat.attack
     }
 
-    pub fn decrease_attack(env: Env, user: Address, decr: u32) -> u32 {
+    fn decrease_attack(env: Env, user: Address, decr: u32) -> u32 {
         // Get the current count.
         let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 
@@ -602,7 +708,7 @@ impl BattleContract {
         player_stat.attack
     }
 
-    pub fn increase_defense(env: Env, user: Address, incr: u32) -> u32 {
+    fn increase_defense(env: Env, user: Address, incr: u32) -> u32 {
         // Get the current count.
         let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 
@@ -616,7 +722,7 @@ impl BattleContract {
         player_stat.defense
     }
 
-    pub fn decrease_defense(env: Env, user: Address, decr: u32) -> u32 {
+    fn decrease_defense(env: Env, user: Address, decr: u32) -> u32 {
         // Get the current count.
         let mut player_stat = Self::get_player_stats(env.clone(), user.clone());
 

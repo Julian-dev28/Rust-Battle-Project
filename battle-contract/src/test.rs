@@ -29,107 +29,6 @@ fn setup_test() -> (
 }
 
 #[test]
-fn test_enum() {
-    let (_env, _contract_id, user_1, user_2, client) = setup_test();
-
-    client.add_player(&user_1.clone());
-    client.add_player(&user_2.clone());
-
-    // User 1 increment series
-    assert_eq!(client.increase_health(&user_1, &1), 101);
-    assert_eq!(
-        client.get_player_stats(&user_1),
-        PlayerStat {
-            player_address: user_1.clone(),
-            sword_class: 0,
-            health: 101,
-            attack: 10,
-            defense: 10,
-            in_battle: false,
-            has_sword: false,
-        }
-    );
-
-    assert_eq!(client.increase_health(&user_1, &2), 103);
-    assert_eq!(
-        client.get_player_stats(&user_1),
-        PlayerStat {
-            player_address: user_1.clone(),
-            sword_class: 0,
-            health: 103,
-            attack: 10,
-            defense: 10,
-            in_battle: false,
-            has_sword: false,
-        }
-    );
-
-    // User 2 increment series
-    assert_eq!(client.increase_health(&user_2, &10), 110);
-    assert_eq!(
-        client.get_player_stats(&user_2),
-        PlayerStat {
-            player_address: user_2.clone(),
-            sword_class: 0,
-            health: 110,
-            attack: 10,
-            defense: 10,
-            in_battle: false,
-            has_sword: false,
-        }
-    );
-
-    assert_eq!(client.increase_health(&user_2, &10), 120);
-    assert_eq!(
-        client.get_player_stats(&user_2),
-        PlayerStat {
-            player_address: user_2.clone(),
-            sword_class: 0,
-            health: 120,
-            attack: 10,
-            defense: 10,
-            in_battle: false,
-            has_sword: false,
-        }
-    );
-}
-
-#[test]
-fn test_decrement() {
-    let (env, _contract_id, _user_1, _user_2, client) = setup_test();
-    let user_1 = Address::random(&env);
-    client.add_player(&user_1);
-
-    assert_eq!(client.increase_health(&user_1, &10), 110);
-    assert_eq!(
-        client.get_player_stats(&user_1),
-        PlayerStat {
-            player_address: user_1.clone(),
-            sword_class: 0,
-            health: 110,
-            attack: 10,
-            defense: 10,
-            in_battle: false,
-            has_sword: false,
-        }
-    );
-
-    assert_eq!(client.decrease_health(&user_1, &9), 101);
-    assert_eq!(
-        client.get_player_stats(&user_1),
-        PlayerStat {
-            player_address: user_1.clone(),
-            sword_class: 0,
-            health: 101,
-            attack: 10,
-            defense: 10,
-            in_battle: false,
-            has_sword: false,
-        }
-    );
-}
-
-#[test]
 fn create_player() {
     let (_env, _contract_id, user_1, _user_2, client) = setup_test();
     client.add_player(&user_1);
@@ -252,3 +151,104 @@ fn create_and_join_battle() {
         expected_battle_after_join.clone()
     );
 }
+
+// #[test]
+// fn test_enum() {
+//     let (_env, _contract_id, user_1, user_2, client) = setup_test();
+
+//     client.add_player(&user_1.clone());
+//     client.add_player(&user_2.clone());
+
+//     // User 1 increment series
+//     assert_eq!(client.increase_health(&user_1, &1), 101);
+//     assert_eq!(
+//         client.get_player_stats(&user_1),
+//         PlayerStat {
+//             player_address: user_1.clone(),
+//             sword_class: 0,
+//             health: 101,
+//             attack: 10,
+//             defense: 10,
+//             in_battle: false,
+//             has_sword: false,
+//         }
+//     );
+
+//     assert_eq!(client.increase_health(&user_1, &2), 103);
+//     assert_eq!(
+//         client.get_player_stats(&user_1),
+//         PlayerStat {
+//             player_address: user_1.clone(),
+//             sword_class: 0,
+//             health: 103,
+//             attack: 10,
+//             defense: 10,
+//             in_battle: false,
+//             has_sword: false,
+//         }
+//     );
+
+//     // User 2 increment series
+//     assert_eq!(client.increase_health(&user_2, &10), 110);
+//     assert_eq!(
+//         client.get_player_stats(&user_2),
+//         PlayerStat {
+//             player_address: user_2.clone(),
+//             sword_class: 0,
+//             health: 110,
+//             attack: 10,
+//             defense: 10,
+//             in_battle: false,
+//             has_sword: false,
+//         }
+//     );
+
+//     assert_eq!(client.increase_health(&user_2, &10), 120);
+//     assert_eq!(
+//         client.get_player_stats(&user_2),
+//         PlayerStat {
+//             player_address: user_2.clone(),
+//             sword_class: 0,
+//             health: 120,
+//             attack: 10,
+//             defense: 10,
+//             in_battle: false,
+//             has_sword: false,
+//         }
+//     );
+// }
+
+// #[test]
+// fn test_decrement() {
+//     let (env, _contract_id, _user_1, _user_2, client) = setup_test();
+//     let user_1 = Address::random(&env);
+//     client.add_player(&user_1);
+
+//     assert_eq!(client.increase_health(&user_1, &10), 110);
+//     assert_eq!(
+//         client.get_player_stats(&user_1),
+//         PlayerStat {
+//             player_address: user_1.clone(),
+//             sword_class: 0,
+//             health: 110,
+//             attack: 10,
+//             defense: 10,
+//             in_battle: false,
+//             has_sword: false,
+//         }
+//     );
+
+//     assert_eq!(client.decrease_health(&user_1, &9), 101);
+//     assert_eq!(
+//         client.get_player_stats(&user_1),
+//         PlayerStat {
+//             player_address: user_1.clone(),
+//             sword_class: 0,
+//             health: 101,
+//             attack: 10,
+//             defense: 10,
+//             in_battle: false,
+//             has_sword: false,
+//         }
+//     );
+// }
