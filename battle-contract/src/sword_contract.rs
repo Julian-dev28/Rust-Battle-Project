@@ -5,21 +5,21 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Error, Str
 // This contract is meant to be used for educational purposes only.
 pub trait NFTCollectionFactory {
     // Admin interface – privileged functions.
-    fn initialize(env: Env, admin: Address, collection_name: String, collection_symbol: String);
+    fn initialize(env: Env, admin: Address);
 
     fn mint_nft(env: Env, to: Address, token_id: u32, amount: i128) -> Result<(), Error>; // Returns the address of the minted NFT
 
     fn melt_blade(env: Env, from: Address, token_id: u32) -> Result<(), Error>;
 
     // Descriptive Interface
-    fn get_token_metadata(env: Env) -> TokenMetadata;
+    fn get_token_metadata(env: Env, token_id: u32) -> TokenMetadata;
 
     fn check_nonnegative_amount(amount: i128);
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-// Metadata struct to hold NFT metadata, including descriptions and IPFS hashes.
+// NFTMetadata struct to hold NFT metadata, including descriptions and IPFS hashes.
 pub struct TokenMetadata {
     token_uri: String, // IPFS hash or URL
     name: String,
@@ -36,18 +36,10 @@ impl NFTCollectionFactory for SwordContract {
             panic!("negative amount is not allowed: {}", amount)
         }
     }
-    fn initialize(env: Env, admin: Address, collection_name: String, collection_symbol: String) {
+    fn initialize(env: Env, admin: Address) {
         admin.require_auth();
         // Initialize the collection.
-        let collection_metadata = TokenMetadata {
-            token_uri: String::from_slice(&env, "https://example.com"),
-            name: collection_name,
-            symbol: collection_symbol,
-        };
         env.storage().instance().set(&NFTDataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&NFTDataKey::Metadata, &collection_metadata);
     }
 
     fn mint_nft(env: Env, to: Address, token_id: u32, amount: i128) -> Result<(), Error> {
@@ -80,7 +72,7 @@ impl NFTCollectionFactory for SwordContract {
             name: _name,
             symbol: _symbol,
         };
-        let nft_metadata_key = NFTDataKey::Metadata;
+        let nft_metadata_key = NFTDataKey::NFTMetadata(token_id);
         env.storage()
             .instance()
             .set(&nft_metadata_key, &nft_metadata);
@@ -98,8 +90,11 @@ impl NFTCollectionFactory for SwordContract {
         Ok(())
     }
 
-    fn get_token_metadata(env: Env) -> TokenMetadata {
+    fn get_token_metadata(env: Env, token_id: u32) -> TokenMetadata {
         // Get the metadata of an NFT.
-        env.storage().instance().get(&NFTDataKey::Metadata).unwrap()
+        env.storage()
+            .instance()
+            .get(&NFTDataKey::NFTMetadata(token_id))
+            .unwrap()
     }
 }

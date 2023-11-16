@@ -23,6 +23,6 @@ pub enum NFTDataKey {
     Balance(Address),
     Nonce(Address),
     State(Address),
-    Metadata,
+    NFTMetadata(u32),
     Admin,
 }

@@ -6,7 +6,7 @@ mod sword_contract;
 pub use crate::sword_contract::{NFTCollectionFactory, SwordContract};
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, map, Address, Env, Error, Map, String, Symbol, Vec,
+    contract, contractimpl, contracttype, map, Address, Env, Error, Map, Symbol, Vec,
 };
 
 /// Enum representing keys for data storage.
