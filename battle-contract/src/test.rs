@@ -3,11 +3,11 @@
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
-mod battle {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32-unknown-unknown/release/battle.optimized.wasm"
-    );
-}
+// mod battle {
+//     soroban_sdk::contractimport!(
+//         file = "../target/wasm32-unknown-unknown/release/battle.optimized.wasm"
+//     );
+// }
 
 // Helper function to set up the testing environment
 fn setup_test() -> (
@@ -46,6 +46,7 @@ fn test_enum() {
             attack: 10,
             defense: 10,
             in_battle: false,
+            has_sword: false,
         }
     );
 
@@ -59,6 +60,7 @@ fn test_enum() {
             attack: 10,
             defense: 10,
             in_battle: false,
+            has_sword: false,
         }
     );
 
@@ -73,6 +75,7 @@ fn test_enum() {
             attack: 10,
             defense: 10,
             in_battle: false,
+            has_sword: false,
         }
     );
 
@@ -86,6 +89,7 @@ fn test_enum() {
             attack: 10,
             defense: 10,
             in_battle: false,
+            has_sword: false,
         }
     );
 }
@@ -106,6 +110,7 @@ fn test_decrement() {
             attack: 10,
             defense: 10,
             in_battle: false,
+            has_sword: false,
         }
     );
 
@@ -119,6 +124,7 @@ fn test_decrement() {
             attack: 10,
             defense: 10,
             in_battle: false,
+            has_sword: false,
         }
     );
 }
@@ -136,6 +142,58 @@ fn create_player() {
             attack: 10,
             defense: 10,
             in_battle: false,
+            has_sword: false,
+        }
+    );
+}
+
+#[test]
+fn forge_and_melt_blade() {
+    let (_env, _contract_id, user_1, _user_2, client) = setup_test();
+    client.add_player(&user_1);
+    assert_eq!(client.get_player_stats(&user_1).sword_class, 0);
+    let class_1: u32 = 1;
+    let class_2: u32 = 2;
+
+    client.forge_blade(&user_1, &class_1);
+    assert_eq!(
+        client.get_player_stats(&user_1),
+        PlayerStat {
+            player_address: user_1.clone(),
+            sword_class: class_1,
+            health: 108,
+            attack: 14,
+            defense: 13,
+            in_battle: false,
+            has_sword: true,
+        }
+    );
+
+    client.melt_blade(&user_1, &class_1);
+    assert_eq!(
+        client.get_player_stats(&user_1),
+        PlayerStat {
+            player_address: user_1.clone(),
+            sword_class: 0,
+            health: 100,
+            attack: 10,
+            defense: 10,
+            in_battle: false,
+            has_sword: false,
+        }
+    );
+
+    client.forge_blade(&user_1, &class_2);
+    assert_eq!(
+        client.get_player_stats(&user_1),
+        PlayerStat {
+            player_address: user_1.clone(),
+            sword_class: 2,
+            health: 97,
+            attack: 26,
+            defense: 12,
+            in_battle: false,
+            has_sword: true
         }
     );
 }
@@ -164,7 +222,7 @@ fn create_and_join_battle() {
         client.get_battle(&battle_name),
         expected_battle_after_create.clone()
     );
-    assert_eq!(client.get_player_stats(&user_1).in_battle, true);
+    assert!(client.get_player_stats(&user_1).in_battle);
 
     // Step 2: Join the battle with user_2
 
@@ -174,7 +232,7 @@ fn create_and_join_battle() {
         (Ok(()), Ok(()))
     );
 
-    assert_eq!(client.get_player_stats(&user_2).in_battle, true);
+    assert!(client.get_player_stats(&user_2).in_battle);
     let player_1 = client
         .get_battle(&battle_name)
         .players

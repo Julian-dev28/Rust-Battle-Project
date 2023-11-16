@@ -3,11 +3,11 @@
 mod balance;
 mod storage_types;
 mod sword_contract;
+pub use crate::sword_contract::{NFTCollectionFactory, SwordContract};
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, map, token, Address, Env, Error, Map, String, Symbol, Vec,
+    contract, contractimpl, contracttype, map, Address, Env, Error, Map, String, Symbol, Vec,
 };
-use sword_contract::{CollectionMetadata, TokenMetadata};
 
 /// Enum representing keys for data storage.
 ///
@@ -44,6 +44,7 @@ pub struct PlayerStat {
     pub attack: u32,
     pub defense: u32,
     pub in_battle: bool,
+    pub has_sword: bool,
 }
 
 /// Struct representing a battle.
@@ -119,6 +120,7 @@ impl BattleContract {
                 attack: 10,
                 defense: 10,
                 in_battle: false,
+                has_sword: false,
             },
         );
 
@@ -163,6 +165,7 @@ impl BattleContract {
                 attack: 0,
                 defense: 0,
                 in_battle: false,
+                has_sword: false,
             })
     }
 
@@ -193,14 +196,15 @@ impl BattleContract {
             .unwrap_or(Vec::new(&env))
     }
 
+    // Classes:
     // Longsword:
-    // Health: +10 HP - Wielding a longsword grants the player an additional 10 hit points, providing extra survivability.
-    // Attack: +5 ATK - The longsword's extended reach and balanced design grant a 5-point increase in attack power.
+    // Health: +8 HP - Wielding a longsword grants the player an additional 10 hit points, providing extra survivability.
+    // Attack: +4 ATK - The longsword's extended reach and balanced design grant a 5-point increase in attack power.
     // Defense: +3 DEF - The longsword's hilt and guard offer decent protection, adding 3 points to the player's defense.
 
     // Sabre:
     // Health: -3 HP - The sabre's focus on speed over protection results in a slight 3 HP reduction.
-    // Attack: +10 ATK - Sabres excel in fast and precise slashing attacks, providing a substantial 10-point boost to the player's attack power.
+    // Attack: +16 ATK - Sabres excel in fast and precise slashing attacks, providing a substantial 10-point boost to the player's attack power.
     // Defense: +2 DEF - Although not the most defensive option, the sabre's curved design and guard offer a 2-point increase in defense.
 
     // Claymore:
@@ -210,55 +214,54 @@ impl BattleContract {
 
     pub fn forge_blade(env: Env, to: Address, class: u32) -> Result<(), Error> {
         to.require_auth();
-
-        assert!(!class > 3 && class > 0, "Invalid sword class");
-
-        let _token_uri: String = match class {
-            0 => String::from_slice(&env, "https://example/token0"),
-            1 => String::from_slice(&env, "https://example/token1"),
-            2 => String::from_slice(&env, "https://example/token2"),
-            _ => String::from_slice(&env, "https://example/token0"),
-        };
-
-        let _name: String = match class {
-            0 => String::from_slice(&env, "Longsword"),
-            1 => String::from_slice(&env, "Sabre"),
-            2 => String::from_slice(&env, "Claymore"),
-            _ => String::from_slice(&env, "Longsword"),
-        };
-
-        let _symbol: String = match class {
-            0 => String::from_slice(&env, "LS"),
-            1 => String::from_slice(&env, "S"),
-            2 => String::from_slice(&env, "C"),
-            _ => String::from_slice(&env, "LS"),
-        };
+        let player_info = Self::get_player_stats(env.clone(), to.clone());
+        assert!(!player_info.has_sword, "must not own a sword");
+        assert!(!player_info.in_battle, "Can't forge blade while in battle");
+        assert!(!class > 2, "Invalid sword class");
 
         let mut player = Self::get_player_stats(env.clone(), to.clone());
         match class {
-            0 => {
-                player.health += 10;
-                player.attack += 5;
+            1 => {
+                player.health += 8;
+                player.attack += 4;
                 player.defense += 3;
             }
-            1 => {
+            2 => {
                 player.health -= 3;
-                player.attack += 10;
+                player.attack += 16;
                 player.defense += 2;
             }
-            2 => {
+            3 => {
                 player.health += 7;
                 player.attack += 11;
                 player.defense -= 3;
             }
-            _ => {}
+            _ => {
+                player.health += 8;
+                player.attack += 4;
+                player.defense += 3;
+            }
         }
 
         player.sword_class = class;
-        let sword_contract_client =
-            sword_contract::SwordContractClient::new(&env, &env.current_contract_address());
-        sword_contract_client.mint_nft(&to, &_name, &_symbol, &class, &1, &_token_uri);
+        player.has_sword = true;
+        let _ = SwordContract::mint_nft(env.clone(), to.clone(), class.clone(), 1);
         Self::set_player_stats(env.clone(), to.clone(), player)
+    }
+
+    pub fn melt_blade(env: Env, from: Address, class: u32) -> Result<(), Error> {
+        from.require_auth();
+        let mut player = Self::get_player_stats(env.clone(), from.clone());
+        assert!(player.has_sword, "must own a sword");
+        assert!(!player.in_battle, "Can't melt blade while in battle");
+        let _ = SwordContract::melt_blade(env.clone(), from.clone(), class.clone());
+
+        player.health = 100;
+        player.attack = 10;
+        player.defense = 10;
+        player.sword_class = 0;
+        player.has_sword = false;
+        Self::set_player_stats(env.clone(), from.clone(), player)
     }
 
     /// Creates a battle.

@@ -24,6 +24,5 @@ pub enum NFTDataKey {
     Nonce(Address),
     State(Address),
     Metadata,
-    CollectionMetadata,
     Admin,
 }
