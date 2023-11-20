@@ -28,6 +28,57 @@ fn setup_test() -> (
     (env, contract_id, user_1, user_2, client)
 }
 
+fn setup_battle_sequence() -> (
+    Env,
+    Address,
+    Address,
+    Address,
+    u32,
+    u32,
+    Option<u64>,
+    Option<u64>,
+    Symbol,
+    BattleContractClient<'static>,
+) {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.budget().reset_unlimited();
+    let contract_id = env.register_contract(None, BattleContract);
+    // let contract_id: Address = env.register_contract_wasm(None, battle::WASM);
+    let user_1 = Address::random(&env);
+    let user_2 = Address::random(&env);
+    let client = BattleContractClient::new(&env, &contract_id);
+    let class_1: u32 = 1;
+    let class_2: u32 = 2;
+    let attack: Option<u64> = core::prelude::v1::Some(1);
+    let defend: Option<u64> = core::prelude::v1::Some(2);
+    let battle_name = Symbol::new(&env, "Constantine");
+    client.add_player(&user_1);
+    client.add_player(&user_2);
+    client.forge_blade(&user_1, &1);
+    client.forge_blade(&user_2, &1);
+    assert_eq!(
+        client.create_battle(&battle_name, &user_1),
+        (Ok(()), Ok(()))
+    );
+    assert_eq!(
+        client.join_battle(&battle_name, &user_2.clone()),
+        (Ok(()), Ok(()))
+    );
+    (
+        env,
+        contract_id,
+        user_1,
+        user_2,
+        class_1,
+        class_2,
+        attack,
+        defend,
+        battle_name,
+        client,
+    )
+}
+
 #[test]
 fn create_player() {
     let (_env, _contract_id, user_1, _user_2, client) = setup_test();
@@ -100,6 +151,11 @@ fn forge_and_melt_blade() {
 #[test]
 fn create_and_join_battle() {
     let (env, contract_id, user_1, user_2, client) = setup_test();
+    let class_1: u32 = 1;
+    let class_2: u32 = 2;
+
+    client.forge_blade(&user_1, &class_1);
+
     let battle_name = Symbol::new(&env, "Constantine");
 
     // Step 1: Create the battle with user_1
@@ -115,6 +171,7 @@ fn create_and_join_battle() {
         name: battle_name.clone(),
         players: map![&env, (user_1.clone(), 1), (contract_id.clone(), 2)],
         moves: map![&env, (user_1.clone(), 0), (contract_id.clone(), 0)],
+        turns: 0,
         winner: contract_id.clone(),
     };
     assert_eq!(
@@ -126,6 +183,7 @@ fn create_and_join_battle() {
     // Step 2: Join the battle with user_2
 
     client.add_player(&user_2.clone());
+    client.forge_blade(&user_2, &class_2);
     assert_eq!(
         client.join_battle(&battle_name, &user_2.clone()),
         (Ok(()), Ok(()))
@@ -144,12 +202,80 @@ fn create_and_join_battle() {
         name: battle_name.clone(),
         players: map![&env, (player_1.clone(), 1), (user_2.clone(), 2)],
         moves: map![&env, (player_1.clone(), 0), (user_2.clone(), 0)],
+        turns: 0,
         winner: contract_id.clone(),
     };
     assert_eq!(
         client.get_battle(&battle_name),
         expected_battle_after_join.clone()
     );
+}
+
+#[test]
+
+fn test_battle_sequence() {
+    let (
+        env,
+        contract_id,
+        user_1,
+        user_2,
+        _class_1,
+        _class_2,
+        attack,
+        _defend,
+        battle_name,
+        client,
+    ) = setup_battle_sequence();
+
+    let expected_battle_after_join = Battle {
+        battle_status: 1,
+        name: battle_name.clone(),
+        players: map![&env, (user_1.clone(), 1), (user_2.clone(), 2)],
+        moves: map![&env, (user_1.clone(), 0), (user_2.clone(), 0)],
+        turns: 0,
+        winner: contract_id.clone(),
+    };
+    assert_eq!(
+        client.get_battle(&battle_name),
+        expected_battle_after_join.clone(),
+    );
+
+    // Both players attack
+    client.attack_or_defend_choice(&user_1, &1, &battle_name);
+    assert_eq!(
+        client.get_battle(&battle_name).moves.get(user_1.clone()),
+        attack.clone()
+    );
+
+    assert_eq!(client.get_battle(&battle_name).turns, 1);
+
+    client.attack_or_defend_choice(&user_2, &1, &battle_name);
+    assert_eq!(client.get_battle(&battle_name).turns, 0);
+
+    // get player stats
+    let player_1 = client.get_player_stats(&user_1);
+    let player_2 = client.get_player_stats(&user_2);
+
+    assert_eq!(player_1.health, 94);
+    assert_eq!(player_2.health, 94);
+
+    // // Step 4: User 2 attacks
+    // assert_eq!(
+    //     client.attack(&battle_name, &user_2.clone()),
+    //     (Ok(()), Ok(()))
+    // );
+
+    // // Step 5: User 1 attacks
+    // assert_eq!(
+    //     client.attack(&battle_name, &user_1.clone()),
+    //     (Ok(()), Ok(()))
+    // );
+
+    // // Step 6: User 2 attacks
+    // assert_eq!(
+    //     client.attack(&battle_name, &user_2.clone()),
+    //     (Ok(()), Ok(()))
+    // );
 }
 
 // #[test]
